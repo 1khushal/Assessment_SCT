@@ -87,15 +87,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
+      - name: Checkout code
+        uses: actions/checkout@v4      # <-- ADD THIS
 
-    - name: Configure Kubeconfig
-      run: |
-        echo "${{ secrets.KUBECONFIG }}" > kubeconfig
-        export KUBECONFIG=kubeconfig
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
 
-    - name: Deploy to Kubernetes
-      run: |
-        kubectl apply -f k8s-deployment.yaml
-        kubectl apply -f k8s-service.yaml
+      - name: Configure Kubeconfig
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f k8s-deployment.yaml
+          kubectl apply -f k8s-service.yaml
