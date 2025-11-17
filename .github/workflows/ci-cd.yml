@@ -1,0 +1,97 @@
+name: CI-CD-Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  # 1. BUILD JOB
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build App
+      run: echo "Build step done"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: node-app-artifact
+        path: .
+
+  # 2. TEST JOB
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: node-app-artifact
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run tests
+      run: npm test
+
+  # 3. DOCKER BUILD & PUSH JOB
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build Docker image
+      run: docker build -t ghcr.io/${{ github.repository_owner }}/my-node-app:latest .
+
+    - name: Push Docker image
+      run: docker push ghcr.io/${{ github.repository_owner }}/my-node-app:latest
+
+  # 4. DEPLOY JOB
+  deploy:
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Configure Kubeconfig
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s-deployment.yaml
+        kubectl apply -f k8s-service.yaml
