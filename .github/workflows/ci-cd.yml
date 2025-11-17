@@ -87,20 +87,21 @@ jobs:
 
   # 5. DEPLOY
   deploy:
-    needs: setup-cluster
     runs-on: ubuntu-latest
+    needs: docker
+
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download kubeconfig
-      uses: actions/download-artifact@v4
-      with:
-        name: kubeconfig
+      - name: Create KIND cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: kind
 
-    - uses: azure/setup-kubectl@v3
+      - name: Export kubeconfig
+        run: kind get kubeconfig --name kind > kubeconfig
 
-    - name: Apply K8s manifests
-      run: |
-        export KUBECONFIG=kubeconfig
-        kubectl apply -f k8s-deployment.yaml
-        kubectl apply -f k8s-service.yaml
+      - name: Deploy to Kubernetes
+        run: kubectl apply -f k8s-deployment.yaml
+
