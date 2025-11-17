@@ -1,9 +1,5 @@
 name: CI-CD-Pipeline
 
-permissions:
-  contents: read
-  packages: write
-  
 on:
   push:
     branches: [ "main" ]
@@ -12,93 +8,93 @@ on:
 
 jobs:
 
-  # 1. BUILD JOB
+  # 1. BUILD
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Setup Node
-      uses: actions/setup-node@v4
+    - uses: actions/setup-node@v4
       with:
         node-version: 18
 
-    - name: Install dependencies
-      run: npm install
+    - run: npm install
+    - run: echo "Build step done"
 
-    - name: Build App
-      run: echo "Build step done"
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: node-app-artifact
         path: .
 
-  # 2. TEST JOB
+  # 2. TEST
   test:
     needs: build
     runs-on: ubuntu-latest
-
     steps:
-    - name: Download artifact
-      uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v4
       with:
         name: node-app-artifact
 
-    - name: Setup Node
-      uses: actions/setup-node@v4
+    - uses: actions/setup-node@v4
       with:
         node-version: 18
 
-    - name: Install dependencies
-      run: npm install
+    - run: npm install
+    - run: npm test
 
-    - name: Run tests
-      run: npm test
-
-  # 3. DOCKER BUILD & PUSH JOB
+  # 3. DOCKER
   docker:
     needs: test
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: 1khushal
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image
-        run: docker build -t ghcr.io/1khushal/my-node-app:latest .
+    - name: Build Docker image
+      run: docker build -t ghcr.io/${{ github.repository_owner }}/my-node-app:latest .
 
-      - name: Push Docker image
-        run: docker push ghcr.io/1khushal/my-node-app:latest
+    - name: Push Docker image
+      run: docker push ghcr.io/${{ github.repository_owner }}/my-node-app:latest
 
-  # 4. DEPLOY JOB
-  deploy:
+  # 4. SETUP KIND CLUSTER
+  setup-cluster:
     needs: docker
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+    - name: Create KIND cluster
+      uses: helm/kind-action@v1.8.0
 
-      - name: Download kubeconfig
-        uses: actions/download-artifact@v4
-        with:
-          name: kubeconfig
+    - name: Export kubeconfig
+      run: kind get kubeconfig > kubeconfig
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+    - name: Upload kubeconfig artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: kubeconfig
+        path: kubeconfig
 
-      - name: Deploy to Kubernetes
-        run: |
-          export KUBECONFIG=kubeconfig
-          kubectl apply -f k8s-deployment.yaml
-          kubectl apply -f k8s-service.yaml
+  # 5. DEPLOY
+  deploy:
+    needs: setup-cluster
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download kubeconfig
+      uses: actions/download-artifact@v4
+      with:
+        name: kubeconfig
+
+    - uses: azure/setup-kubectl@v3
+
+    - name: Apply K8s manifests
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl apply -f k8s-deployment.yaml
+        kubectl apply -f k8s-service.yaml
