@@ -72,23 +72,29 @@ jobs:
   setup-cluster:
     needs: docker
     runs-on: ubuntu-latest
+
     steps:
-    - name: Create KIND cluster
-      uses: helm/kind-action@v1.8.0
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Export kubeconfig
-      run: kind get kubeconfig > kubeconfig
+      - name: Create KIND cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: kind
 
-    - name: Upload kubeconfig artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: kubeconfig
-        path: kubeconfig
+      - name: Export kubeconfig
+        run: kind get kubeconfig --name kind > kubeconfig
+
+      - name: Upload kubeconfig artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubeconfig
+          path: kubeconfig
 
   # 5. DEPLOY
   deploy:
     runs-on: ubuntu-latest
-    needs: docker
+    needs: setup-cluster
 
     steps:
       - name: Checkout code
